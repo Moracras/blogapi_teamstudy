@@ -14,6 +14,21 @@ require("dotenv").config();
 const PORT = process.env.PORT || 8000;
 const HOST = process.env.HOST || "127.0.0.1";
 
+app.use(express.json());
+
+app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        // Handle JSON parsing errors
+        res.status(400).send({
+            error: 'Invalid JSON',
+            message: 'The request body contains invalid JSON.'
+        });
+    } else {
+        // Handle other errors
+        next(err);
+    }
+});
+
 app.use(
   session({
     secret: process.env.SECRET_KEY, // Şifreleme anahtarı
@@ -36,10 +51,10 @@ async function loadServices(dir) {
     const stat = await fs.promises.stat(filePath);
 
     if (stat.isDirectory()) {
-      // Recursively load commands from subdirectories
+      // Recursively load services from subdirectories
       await loadServices(filePath);
     } else if (file.endsWith(".bsvc")) {
-      // Load command module
+      // Load service module
 
       try {
         const data = fs.readFileSync(filePath, { encoding: "utf8" });
