@@ -17,12 +17,7 @@ class ServiceBase {
     }
 
     static SendNoContentResponse(res, details, data) {
-        res.status(204).send({
-            error: false,
-            message: "No Content",
-            details: details,
-            data: data
-        })
+        res.status(204).send()
     }
 
     static SendNotFoundResponse(res) {
