@@ -104,7 +104,7 @@ class ServiceBase {
      * @returns {boolean}
      */
     static MandateQueries(req, res, queries) {
-        const missingQueries = queries.filter((/** @type {string | number} */ query) => !req.query[query]);
+        const missingQueries = queries.filter((query) => req.query[query] === undefined);
 
         if (missingQueries.length > 0) {
             ServiceBase.SendBadRequestResponse(res, `Missing required queries: ${missingQueries.join(', ')}`)
@@ -122,10 +122,10 @@ class ServiceBase {
      * @param {import('express').Request} req
      * @param {import('express').Response} res
      * @param {string[]} data
-     * 
+     * @returns {boolean}
      */
     static MandateJsonData(req, res, data) {
-        const missingData = data.filter((prop) => !req.body[prop]);
+        const missingData = data.filter((prop) => req.body[prop] === undefined);
 
         if (missingData.length > 0) {
             ServiceBase.SendBadRequestResponse(res, `Missing required data: ${missingData.join(', ')}`)

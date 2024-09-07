@@ -1,7 +1,8 @@
 //@ts-check
 'use strict'
 
-const BlogPost = require("./mongoblogpostmodel")
+const BlogPost = require("./models/mongoblogpostmodel")
+const BlogLike = require("./models/mongobloglikemodel")
 // @ts-ignore
 const mongoose = require('mongoose');
 
@@ -79,7 +80,7 @@ class MongoDBBlogHandler {
 			session.startTransaction();
 
 			try {
-				await newBlog.save({session})
+				await newBlog.save({ session })
 
 				const updatedPost = await BlogPost.findByIdAndUpdate(
 					data.commentToId,
@@ -102,11 +103,10 @@ class MongoDBBlogHandler {
 					}
 					await session.commitTransaction();
 				}
-				session.endSession();
 
 			} catch (err) {
 				await session.abortTransaction();
-				session.endSession();
+
 				console.error('Error saving blog post:', err);
 
 				if (err.name === 'ValidationError') {
@@ -122,6 +122,8 @@ class MongoDBBlogHandler {
 						message: "Internal Server Error"
 					}
 				}
+			} finally {
+				session.endSession();
 			}
 			
 
@@ -199,6 +201,265 @@ class MongoDBBlogHandler {
 		}
 	}
 
+	async CheckLikes(userId, blogIds) {
+
+		const results = {}
+
+		try {
+			const validBlogIds = [];
+
+			for (const blogId of blogIds) {
+
+				if (!mongoose.Types.ObjectId.isValid(blogId)) {
+					console.log('Invalid blogId:', blogId);
+					results[blogId] = {
+						success: false,
+						message: "Invalid blogId"
+					}
+					continue
+				} else {
+					validBlogIds.push(blogId)
+				}
+			}
+
+			const likedBlogs = await BlogLike.find({
+				userId: userId,
+				blogId: { $in: validBlogIds }
+			}).exec();
+
+			likedBlogs.forEach(likedata => {
+				results[likedata.blogId] = {
+					success: true,
+					liked: true,
+					isLike: likedata.isLike
+				};
+			});
+
+			validBlogIds.forEach(id => {
+				if (!results[id]) {
+					results[id] = {
+						success: true,
+						liked: false
+					};
+				}
+			});
+
+			return results
+
+		} catch (err) {
+			console.error('Error reading like data:', err)
+			
+			return null
+		}
+	}
+
+	async AddLikeOrDislike(userId, currentLikeState, data) {
+		const blogId = data.blogId
+		const isLike = data.isLike
+
+		if (!mongoose.Types.ObjectId.isValid(blogId)) {
+			console.log('Invalid blogId:', blogId);
+			return {
+				status: 400,
+				content: {
+					error: true,
+					message: 'Invalid blogId:' + blogId
+				}
+			};
+		}
+
+		if (currentLikeState.liked && currentLikeState.isLike === isLike) {
+			console.log(`User [${userId}] already liked/disliked: ${blogId}`);
+			return {
+				status: 200,
+				content: {
+					error: false,
+					message: `User [${userId}] already liked/disliked: ${blogId}`
+				}
+			};
+		}
+
+		const session = await mongoose.startSession();
+		session.startTransaction();
+
+		try {
+			//fix previous like/dislike
+			const post = await BlogPost.findById(blogId).exec()
+
+			if (!post) {
+				console.error('Post to like/dislike not found: ', blogId);
+				await session.abortTransaction();
+
+				return {
+					status: 404,
+					content: {
+						error: true,
+						message: 'Post to like/dislike not found: ' + blogId
+					}
+				}
+			}
+
+			if (currentLikeState.liked) {
+				if (currentLikeState.isLike) {
+					post.likes -= 1
+				} else {
+					post.dislikes -= 1
+				}
+			}
+
+			if (isLike) {
+				post.likes += 1
+			} else {
+				post.dislikes += 1
+			}
+
+			await post.save({ session })
+
+			//write like/dislike data
+
+			if (currentLikeState.liked) {
+				const likeData = await BlogLike.findOne({ blogId: blogId, userId: userId }).exec()
+
+				if (!likeData) {
+					await session.abortTransaction();
+
+					return {
+						status: 404,
+						content: {
+							error: true,
+							message: 'Like data not found.'
+						}
+					};
+				}
+
+				likeData.isLike = isLike
+
+				await likeData.save({ session })
+			} else {
+				const newLike = new BlogLike({
+					userId: userId,
+					blogId: blogId,
+					isLike: isLike
+				})
+
+				await newLike.save({ session })
+			}
+
+			await session.commitTransaction();
+
+			return {
+				status: 200,
+				content: {
+					error: false,
+				}
+			}
+		} catch (err) {
+			await session.abortTransaction();
+			
+			console.error('Error saving like/dislike data:', err);
+			return {
+				status: 500,
+				content: {
+					error: true,
+					message: 'Internal Server Error!'
+				}
+			};
+		} finally {
+			session.endSession();
+		}
+	}
+
+	async RemoveLikeOrDislike(userId, currentLikeState, blogId) {
+		if (!mongoose.Types.ObjectId.isValid(blogId)) {
+			console.log('Invalid blogId:', blogId);
+			return {
+				status: 400,
+				content: {
+					error: true,
+					message: 'Invalid blogId:' + blogId
+				}
+			};
+		}
+
+		if (!currentLikeState.liked) {
+			console.log(`User [${userId}] did not like/dislike: ${blogId}`);
+			return {
+				status: 200,
+				content: {
+					error: false,
+					message: `User [${userId}] did not like/dislike: ${blogId}`
+				}
+			};
+		}
+
+		const session = await mongoose.startSession();
+		session.startTransaction();
+
+		try {
+			const post = await BlogPost.findById(blogId).exec()
+
+			if (!post) {
+				console.error('Post to remove like/dislike not found: ', blogId);
+				await session.abortTransaction();
+
+				return {
+					status: 404,
+					content: {
+						error: true,
+						message: 'Post to remove like/dislike not found: ' + blogId
+					}
+				}
+			}
+
+			if (currentLikeState.isLike) {
+				post.likes -= 1
+			} else {
+				post.dislikes -= 1
+			}
+
+
+			await post.save({ session })
+
+			//remove like/dislike data
+
+			const likeData = await BlogLike.findOneAndDelete({ blogId: blogId, userId: userId }).session(session).exec()
+
+			if (!likeData) {
+				await session.abortTransaction();
+
+				return {
+					status: 404,
+					content: {
+						error: true,
+						message: 'Like data not found.'
+					}
+				};
+			}
+
+			await session.commitTransaction();
+
+
+			return {
+				status: 200,
+				content: {
+					error: false,
+				}
+			}
+		} catch (err) {
+			await session.abortTransaction();
+			
+			console.error('Error saving like/dislike data:', err);
+			return {
+				status: 500,
+				content: {
+					error: true,
+					message: 'Internal Server Error!'
+				}
+			};
+		} finally {
+			session.endSession();
+		}
+	}
 }
 
 module.exports = new MongoDBBlogHandler()

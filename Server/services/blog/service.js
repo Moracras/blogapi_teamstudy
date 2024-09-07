@@ -82,13 +82,17 @@ class BlogService extends ServiceBase {
 
     async HandleLikeCheck(req, res) {
         try {
-            console.log("Received params: ", req.query)
-            const blogIds = req.query.blogIds
+            console.log("Received params for like check: ", req.query)
+            if (!ServiceBase.MandateQueries(req,res,["blogIds"])) return;
+
+            const blogIds = req.query.blogIds.split(",")
+
             const userId = 1 //TODO: Add actual check when user is present
 
-            const result = await DatabaseHandler.ReadLikes(blogIds)
-            if (result) {
-                ServiceBase.SendOkResponse(res, null, result.toJSON())
+            const results = await DatabaseHandler.CheckLikes(userId, blogIds)
+
+            if (results) {
+                ServiceBase.SendOkResponse(res, null, results)
             } else {
                 ServiceBase.SendErrorResponse(res)
             }
@@ -100,11 +104,41 @@ class BlogService extends ServiceBase {
     }
 
     async HandleLikePost(req, res) {
-        //TODO
+        try {
+            console.log("Received data for like/dislike: ", req.body)
+            if (!ServiceBase.MandateJsonData(req, res, ["blogId","isLike"])) return;
+
+            const userId = 1 //TODO: Add actual check when user is present
+
+            const currentLikeState = await DatabaseHandler.CheckLikes(userId, [req.body.blogId])
+
+            const responsePayload = await DatabaseHandler.AddLikeOrDislike(userId, currentLikeState[req.body.blogId], req.body)
+
+            ServiceBase.SendResponse(res, responsePayload)
+
+        } catch (err) {
+            console.error("Unable to write like/dislike data: ", err)
+            ServiceBase.SendErrorResponse(res)
+        }
     }
 
     async HandleLikeDelete(req, res) {
-        //TODO
+        try {
+            console.log("Received data for like/dislike removal: ", req.query)
+            if (!ServiceBase.MandateQueries(req, res, ["blogId"])) return;
+
+            const userId = 1 //TODO: Add actual check when user is present
+
+            const currentLikeState = await DatabaseHandler.CheckLikes(userId, [req.query.blogId])
+
+            const responsePayload = await DatabaseHandler.RemoveLikeOrDislike(userId, currentLikeState[req.query.blogId], req.query.blogId)
+
+            ServiceBase.SendResponse(res, responsePayload)
+
+        } catch (err) {
+            console.error("Unable to remove like/dislike data: ", err)
+            ServiceBase.SendErrorResponse(res)
+        }
     }
 
 }
