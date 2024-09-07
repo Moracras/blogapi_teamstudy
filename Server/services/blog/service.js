@@ -20,6 +20,10 @@ class BlogService extends ServiceBase {
             .get(BlogService.Instance.HandleBlogRead)
             .post(BlogService.Instance.HandleBlogPost)
             .delete(BlogService.Instance.HandleBlogDelete)
+        this.router.route("/like")
+            .get(BlogService.Instance.HandleLikeCheck)
+            .post(BlogService.Instance.HandleLikePost)
+            .delete(BlogService.Instance.HandleLikeDelete)
     }
 
     async HandleBlogRequest(req, res, next) {
@@ -27,8 +31,8 @@ class BlogService extends ServiceBase {
     }
 
     async HandleBlogRead(req, res) {
-        console.log("Received params: ", req.query)
         try {
+            console.log("Received params: ", req.query)
             const blogId = req.query.blogId
 
             const result = await DatabaseHandler.ReadBlog(blogId)
@@ -45,14 +49,18 @@ class BlogService extends ServiceBase {
     }
 
     async HandleBlogPost(req, res) {
-        console.log("Received body: ",req.body)
         try {
+            console.log("Received body: ", req.body)
             const userId = req.body.userId
             const categoryId = req.body.categoryId
             const title = req.body.title
             const message = req.body.message
+            let commentToId = null
+            if (req.body.commentToId !== undefined) {
+                commentToId = req.body.commentToId
+            }
 
-            const success = await DatabaseHandler.PostBlog(userId, categoryId, title, message)
+            const success = await DatabaseHandler.PostBlog(userId, categoryId, title, message, commentToId)
 
             if (success) {
                 ServiceBase.SendOkResponse(res, null, null)
@@ -82,6 +90,18 @@ class BlogService extends ServiceBase {
             console.error("Unable to delete blog: ", err)
             ServiceBase.SendErrorResponse(res)
         }
+    }
+
+    async HandleLikeCheck(req, res) {
+        //TODO
+    }
+
+    async HandleLikePost(req, res) {
+        //TODO
+    }
+
+    async HandleLikeDelete(req, res) {
+        //TODO
     }
 
 }
