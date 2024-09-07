@@ -32,14 +32,27 @@ class BlogService extends ServiceBase {
 
     async HandleBlogRead(req, res) {
         try {
-            console.log("Received params: ", req.query)
+            console.log("Received params to read post: ", req.query)
+
+            if (!req.query.blogId) {
+                ServiceBase.SendBadRequestResponse(res, "blogId query is required")
+                return
+            }
+
             const blogId = req.query.blogId
 
             const result = await DatabaseHandler.ReadBlog(blogId)
-            if (result) {
-                ServiceBase.SendOkResponse(res, null, result.toJSON())
+
+            if (result.errormessage) {
+                if (result.errormessage === "Unknown") {
+                    ServiceBase.SendErrorResponse(res)
+                } else if (result.errormessage === "NotFound") {
+                    ServiceBase.SendNotFoundResponse(res)
+                } else {
+                    ServiceBase.SendBadRequestResponse(res, result.errormessage)
+                }
             } else {
-                ServiceBase.SendErrorResponse(res)
+                ServiceBase.SendOkResponse(res, null, result.blog.toJSON())
             }
             
         } catch (err) {
@@ -50,8 +63,19 @@ class BlogService extends ServiceBase {
 
     async HandleBlogPost(req, res) {
         try {
-            console.log("Received body: ", req.body)
-            const userId = req.body.userId
+            console.log("Received body to post: ", req.body)
+
+            if (!req.body.userId) {
+                ServiceBase.SendBadRequestResponse(res, "userId is required")
+                return
+            }
+
+            if (!req.body.message) {
+                ServiceBase.SendBadRequestResponse(res, "message is required")
+                return
+            }
+
+            const userId = req.body.userId //TODO: Add actual userid when user is present
             const categoryId = req.body.categoryId
             const title = req.body.title
             const message = req.body.message
@@ -60,12 +84,16 @@ class BlogService extends ServiceBase {
                 commentToId = req.body.commentToId
             }
 
-            const success = await DatabaseHandler.PostBlog(userId, categoryId, title, message, commentToId)
+            const errormessage = await DatabaseHandler.PostBlog(userId, categoryId, title, message, commentToId)
 
-            if (success) {
+            if (!errormessage) {
                 ServiceBase.SendOkResponse(res, null, null)
-            } else {
+            } else if (errormessage == "Unknown") {
                 ServiceBase.SendErrorResponse(res)
+            } else if (errormessage == "NotFound") {
+                ServiceBase.SendNotFoundResponse(res, "Original post to comment on was not found with given Id.")
+            } else {
+                ServiceBase.SendBadRequestResponse(res, errormessage)
             }
         } catch (err) {
             console.error("Unable to post blog: ", err)
@@ -75,16 +103,29 @@ class BlogService extends ServiceBase {
 
     async HandleBlogDelete(req, res) {
         try {
+            console.log("Received params to delete post: ", req.query)
+
+            if (!req.query.blogId) {
+                ServiceBase.SendBadRequestResponse(res, "blogId query is required")
+                return
+            }
+
             const blogId = req.query.blogId
 
             const authorized = true //TODO: Add actual authorization check
 
-            const success = await DatabaseHandler.DeleteBlog(blogId)
+            const result = await DatabaseHandler.DeleteBlog(blogId)
 
-            if (success) {
-                ServiceBase.SendNoContentResponse(res,null,null)
+            if (result.errormessage) {
+                if (result.errormessage === "Unknown") {
+                    ServiceBase.SendErrorResponse(res)
+                } else if (result.errormessage === "NotFound") {
+                    ServiceBase.SendNotFoundResponse(res)
+                } else {
+                    ServiceBase.SendBadRequestResponse(res, result.errormessage)
+                }
             } else {
-                ServiceBase.SendNotFoundResponse(res)
+                ServiceBase.SendNoContentResponse(res,null,null)
             }
         } catch (err) {
             console.error("Unable to delete blog: ", err)
@@ -93,7 +134,22 @@ class BlogService extends ServiceBase {
     }
 
     async HandleLikeCheck(req, res) {
-        //TODO
+        try {
+            console.log("Received params: ", req.query)
+            const blogIds = req.query.blogIds
+            const userId = 1 //TODO: Add actual check when user is present
+
+            const result = await DatabaseHandler.ReadLikes(blogIds)
+            if (result) {
+                ServiceBase.SendOkResponse(res, null, result.toJSON())
+            } else {
+                ServiceBase.SendErrorResponse(res)
+            }
+
+        } catch (err) {
+            console.error("Unable to read like data: ", err)
+            ServiceBase.SendErrorResponse(res)
+        }
     }
 
     async HandleLikePost(req, res) {
