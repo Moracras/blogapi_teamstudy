@@ -15,7 +15,11 @@ class MongoDBBlogHandler {
 			if (!mongoose.Types.ObjectId.isValid(blogId)) {
 				console.log('Invalid blogId:', blogId);
 				return {
-					errormessage: 'Invalid blogId:' + blogId,
+					status: 400,
+					content: {
+						error: true,
+						message: 'Invalid blogId:' + blogId,
+					}
 				};
 			}
 			const blog = await BlogPost.findById(blogId).exec();
@@ -24,35 +28,52 @@ class MongoDBBlogHandler {
 				// Blog not found
 				console.log('Blog post not found:', blogId);
 				return {
-					errormessage: "NotFound",
+					status: 404,
+					content: {
+						error: true,
+						message: 'Requested post not found',
+					}
 				};
 			}
 
 			return {
-				blog: blog
+				status: 200,
+				content: {
+					error: false,
+					data: blog.toJSON()
+				}
 			};
 		} catch (err) {
 			console.error('Error reading blog post:', err)
 			return {
-				errormessage: "Unknown",
-			}
+				status: 500,
+				content: {
+					error: true,
+					message: 'Internal Server Error!'
+				}
+			};
 		}
 
 	}
 
-	async PostBlog(userId, categoryId, title, message, commentToId) {
-		let errormessage = "Unknown"
+	async PostBlog(data) {
+		const response = {
+			status: 500,
+			content: {
+				error: true
+			}
+		}
 		const newBlog = new BlogPost({
-			userId: userId,
-			categoryId: categoryId,
-			title: title,
-			message: message
+			userId: data.userId,
+			categoryId: data.categoryId,
+			title: data.title,
+			message: data.message
 		})
 
-		if (commentToId) { //Post as Comment
+		if (data.commentToId) { //Post as Comment
 			console.log("Posting Comment...")
 
-			newBlog.commentToId = commentToId
+			newBlog.commentToId = data.commentToId
 
 			const session = await mongoose.startSession();
 			session.startTransaction();
@@ -61,17 +82,24 @@ class MongoDBBlogHandler {
 				await newBlog.save({session})
 
 				const updatedPost = await BlogPost.findByIdAndUpdate(
-					commentToId,
+					data.commentToId,
 					{ $push: { comments: newBlog._id } },
 					{ new: true, session }
 				);
 
 				if (!updatedPost) {
-					errormessage = "NotFound"
-					console.log(`Document with id ${commentToId} not found to comment on`);
+					response.status = 404
+					response.content = {
+						error: true,
+						message: "Original post to comment on was not found with given Id."
+					}
+					console.log(`Document with id ${data.commentToId} not found to comment on`);
 					await session.abortTransaction();
 				} else {
-					errormessage = null
+					response.status = 200
+					response.content = {
+						error: false,
+					}
 					await session.commitTransaction();
 				}
 				session.endSession();
@@ -82,8 +110,18 @@ class MongoDBBlogHandler {
 				console.error('Error saving blog post:', err);
 
 				if (err.name === 'ValidationError') {
-					errormessage = Object.values(err.errors).map(e => e.message).join(', ');
-				} 
+					response.status = 400
+					response.content = {
+						error: true,
+						message: Object.values(err.errors).map(e => e.message).join(', ')
+					}
+				} else {
+					response.status = 500
+					response.content = {
+						error: true,
+						message: "Internal Server Error"
+					}
+				}
 			}
 			
 
@@ -93,16 +131,29 @@ class MongoDBBlogHandler {
 			await newBlog.save()
 				.then(result => {
 					console.log('Blog post saved:', result);
-					errormessage = null
+					response.status = 200
+					response.content = {
+						error: false,
+					}
 				})
-				.catch(error => {
-					console.error('Error saving blog post:', error);
-					if (error.name === 'ValidationError') {
-						errormessage = Object.values(error.errors).map(e => e.message).join(', ');
-					} 
+				.catch(err => {
+					console.error('Error saving blog post:', err);
+					if (err.name === 'ValidationError') {
+						response.status = 400
+						response.content = {
+							error: true,
+							message: Object.values(err.errors).map(e => e.message).join(', ')
+						}
+					} else {
+						response.status = 500
+						response.content = {
+							error: true,
+							message: "Internal Server Error"
+						}
+					}
 				});
 		}
-		return errormessage
+		return response
 	}
 
 	async DeleteBlog(blogId) {
@@ -110,7 +161,11 @@ class MongoDBBlogHandler {
 			if (!mongoose.Types.ObjectId.isValid(blogId)) {
 				console.log('Invalid blogId:', blogId);
 				return {
-					errormessage: 'Invalid blogId:' + blogId,
+					status: 400,
+					content: {
+						error: true,
+						message: 'Invalid blogId:' + blogId
+					}
 				};
 			}
 
@@ -120,19 +175,30 @@ class MongoDBBlogHandler {
 				// Blog not found
 				console.log('Blog post not found:', blogId);
 				return {
-					errormessage: "NotFound",
+					status: 404,
+					content: {
+						error: true,
+						message: 'Blog post to delete not found: ' + blogId
+					}
 				};
 			}
 
 			console.log('Blog post deleted: ', blogId);
-			return {};
+			return {
+				status: 204
+			};
 		} catch (err) {
 			console.error('Error deleting blog post::', err)
 			return {
-				errormessage: "Unknown",
-			}
+				status: 500,
+				content: {
+					error: true,
+					message: 'Internal Server Error!'
+				}
+			};
 		}
 	}
+
 }
 
 module.exports = new MongoDBBlogHandler()
