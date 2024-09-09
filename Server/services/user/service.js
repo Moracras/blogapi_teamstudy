@@ -2,53 +2,65 @@
 "use strict";
 
 const { ServiceBase } = require("../utilities/servicebase");
-const {User} = require("./mongoDBUserModel")
+
+const  User  = require("./mongoDBUserModel");
+
 
 class UserService extends ServiceBase {
-    static Instance = null
+  static Instance = null;
   constructor() {
     super();
+    UserService.Instance = this;
     this.Useractions();
   }
   async Useractions() {
-    this.router.route("/register").post(UserService.Instance.HandleRegister)
+    this.router.route("/register").post(UserService.Instance.HandleRegister);
+    
   }
   async HandleRegister(req, res) {
     try {
-      const { username, email, password } = req.body;
+      if (
+        !ServiceBase.MandateJsonData(req, res, [
+          "username",
+          "email",
+          "password",
+        ])
+      )
+        return;
 
-      if (!username || !email || !password) {
+      const existingUser = await User.findOne({ email: req.body.email });
+      if (existingUser) {
         ServiceBase.SendBadRequestResponse(
           res,
-          "Username, password, and email are required"
+          "User already exists with this email"
         );
         return;
-        
       }
-      const existingUser = await User.findOne({ email });
 
-      if (existingUser) {
-        ServiceBase.SendBadRequestResponse(res, "User already exists with this email");
-        return;
-    }
-
+      const userData = await User.create(req.body);
+      res.status(201).send({
+        msg:"Registration is successful!",
+        error: false,
+        userData
+    }) 
       
-    } catch (err) {}
-  }
-
-  async HandleLogin(req,res){
-    try {
-        
     } catch (err) {
-        // TODO
+      console.error("Cannot create user: ", err);
+      ServiceBase.SendErrorResponse(res);
     }
   }
-  async HandleLogout(req,res){
+
+  async HandleLogin(req, res) {
     try {
-        
     } catch (err) {
-        //TODO
+      // TODO
+    }
+  }
+  async HandleLogout(req, res) {
+    try {
+    } catch (err) {
+      //TODO
     }
   }
 }
-module.exports = new UserService()
+module.exports = new UserService();

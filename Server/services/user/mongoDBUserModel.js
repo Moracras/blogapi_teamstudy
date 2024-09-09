@@ -1,7 +1,7 @@
 //@ts-check
 'use strict'
 
-const {mongoose} = require("mongoose")
+const mongoose = require('mongoose');
 
 const passwordEncryption = require('./userutilities/passwordEncryption')
 
@@ -49,4 +49,4 @@ const UserSchema = new mongoose.Schema({
     timestamps: true
 })
 
-module.exports = mongoose.model('User', UserSchema)
+module.exports = mongoose.model('User', UserSchema,'users')
