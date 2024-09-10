@@ -3,8 +3,7 @@
 
 const { ServiceBase } = require("../utilities/servicebase");
 
-const  User  = require("./mongoDBUserModel");
-
+const User = require("./mongoDBUserModel");
 
 class UserService extends ServiceBase {
   static Instance = null;
@@ -15,7 +14,6 @@ class UserService extends ServiceBase {
   }
   async Useractions() {
     this.router.route("/register").post(UserService.Instance.HandleRegister);
-    
   }
   async HandleRegister(req, res) {
     try {
@@ -28,7 +26,9 @@ class UserService extends ServiceBase {
       )
         return;
 
-      const existingUser = await User.findOne({ email: req.body.email });
+      const existingUser = await User.findOne({
+        $or: [{ email: req.body.email }, { username: req.body.username }],
+      });
       if (existingUser) {
         ServiceBase.SendBadRequestResponse(
           res,
@@ -39,11 +39,10 @@ class UserService extends ServiceBase {
 
       const userData = await User.create(req.body);
       res.status(201).send({
-        msg:"Registration is successful!",
+        msg: "Registration is successful!",
         error: false,
-        userData
-    }) 
-      
+        userData,
+      });
     } catch (err) {
       console.error("Cannot create user: ", err);
       ServiceBase.SendErrorResponse(res);
