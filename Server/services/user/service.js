@@ -29,12 +29,33 @@ class UserService extends ServiceBase {
       const existingUser = await User.findOne({
         $or: [{ email: req.body.email }, { username: req.body.username }],
       });
+
       if (existingUser) {
-        ServiceBase.SendBadRequestResponse(
-          res,
-          "User already exists with this email"
-        );
-        return;
+        if (
+          existingUser.username === req.body.username &&
+          existingUser.email === req.body.email
+        ) {
+          ServiceBase.SendBadRequestResponse(
+            res,
+            "User already exists with this username and email!"
+          );
+          return;
+        }
+        if (existingUser.username === req.body.username) {
+          ServiceBase.SendBadRequestResponse(
+            res,
+            "User already exists with this username!"
+          );
+          return;
+        }
+
+        if (existingUser.email === req.body.email) {
+          ServiceBase.SendBadRequestResponse(
+            res,
+            "User already exists with this email!"
+          );
+          return;
+        }
       }
 
       const userData = await User.create(req.body);
